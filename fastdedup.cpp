@@ -4,7 +4,7 @@
 #include <set>
 #include <vector>
 #include <thread>
-#include <cxxopts.hpp>
+#include <algorithm>
 
 // Función para procesar un archivo y eliminar líneas duplicadas
 void processFile(const std::string& filename, std::set<std::string>& uniqueLines) {
@@ -24,20 +24,11 @@ void processFile(const std::string& filename, std::set<std::string>& uniqueLines
 }
 
 int main(int argc, char* argv[]) {
-    cxxopts::Options options(argv[0], "Eliminar líneas duplicadas de archivos o desde STDIN");
-    options.add_options()
-        ("t,threads", "Número máximo de hilos", cxxopts::value<int>()->default_value("1"))
-        ("f,filenames", "Nombres de archivo para procesar", cxxopts::value<std::vector<std::string>>())
-        ("h,help", "Mostrar ayuda");
-
-    auto result = options.parse(argc, argv);
-
-    if (result.count("help")) {
-        std::cout << options.help() << std::endl;
-        return 0;
+    int numThreads = 1; // Número predeterminado de hilos
+    if (argc > 1) {
+        numThreads = std::stoi(argv[1]); // Obtener el número de hilos desde el primer argumento
     }
 
-    int numThreads = result["threads"].as<int>();
     if (numThreads <= 0) {
         std::cerr << "El número de hilos debe ser mayor que 0" << std::endl;
         return 1;
@@ -47,21 +38,19 @@ int main(int argc, char* argv[]) {
 
     std::set<std::string> uniqueLines; // Usamos un conjunto para almacenar las líneas únicas
 
-    // Procesar archivos dados como argumentos
-    if (result.count("filenames")) {
-        const std::vector<std::string>& files = result["filenames"].as<std::vector<std::string>>();
-        for (const std::string& file : files) {
-            if (file == "-") {
-                // Leer desde STDIN si el archivo es "-"
-                processFile("/dev/stdin", uniqueLines);
-            } else {
-                // Procesar el archivo
-                threads.emplace_back(processFile, file, std::ref(uniqueLines));
-            }
+    // Procesar archivos dados como argumentos a partir del segundo argumento
+    for (int i = 2; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "-") {
+            // Leer desde STDIN si el argumento es "-"
+            processFile("/dev/stdin", uniqueLines);
+        } else {
+            // Procesar el archivo en un hilo separado
+            threads.emplace_back(processFile, arg, std::ref(uniqueLines));
         }
     }
 
-    // Limitar el número de hilos utilizados al número máximo proporcionado por el usuario
+    // Limitar el número de hilos utilizados al número especificado por el usuario
     numThreads = std::min(numThreads, static_cast<int>(threads.size()));
 
     // Esperar a que todos los hilos terminen
